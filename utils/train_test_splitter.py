@@ -11,6 +11,6 @@ if __name__ == '__main__':
     new_train = train.iloc[np.random.permutation(len(train))[:-3301]]
     new_test = train.iloc[np.random.permutation(len(train))[-3301:]]
 
-    new_train.to_csv(ROOT_DIR + '/data/new_train.csv', index=False, header=False)
-    new_test.to_csv(ROOT_DIR + '/data/new_test.csv', index=False, header=False)
+    new_train.to_csv(ROOT_DIR + '/data/new_train.tsv', index=False, header=False, sep='\t')
+    new_test.to_csv(ROOT_DIR + '/data/new_test.tsv', index=False, header=False, sep='\t')
     print('Done')
