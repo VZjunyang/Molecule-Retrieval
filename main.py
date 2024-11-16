@@ -10,6 +10,7 @@ import time
 import os
 import pandas as pd
 
+torch.cuda.empty_cache()
 CE = torch.nn.CrossEntropyLoss()
 def contrastive_loss(v1, v2):
   logits = torch.matmul(v1,torch.transpose(v2, 0, 1))
@@ -25,7 +26,7 @@ train_dataset = GraphTextDataset(root='./data/', gt=gt, split='train', tokenizer
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 nb_epochs = 5
-batch_size = 32
+batch_size = 128
 learning_rate = 2e-5
 
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
@@ -50,6 +51,7 @@ for i in range(nb_epochs):
     print('-----EPOCH{}-----'.format(i+1))
     model.train()
     for batch in train_loader:
+        torch.cuda.empty_cache()
         input_ids = batch.input_ids
         batch.pop('input_ids')
         attention_mask = batch.attention_mask
@@ -75,6 +77,7 @@ for i in range(nb_epochs):
     model.eval()       
     val_loss = 0        
     for batch in val_loader:
+        torch.cuda.empty_cache()
         input_ids = batch.input_ids
         batch.pop('input_ids')
         attention_mask = batch.attention_mask
@@ -98,6 +101,7 @@ for i in range(nb_epochs):
         'loss': loss,
         }, save_path)
         print('checkpoint saved to: {}'.format(save_path))
+        
 
 
 print('loading best model...')
