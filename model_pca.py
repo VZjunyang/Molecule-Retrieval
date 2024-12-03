@@ -28,8 +28,7 @@ print("Training started...")
 from utils.dataloader import GraphTextDataset, GraphDataset, TextDataset
 from torch_geometric.data import DataLoader
 # from models.Model import BaseModel
-# from models.model2 import GAT_MLP
-from models.model3_transfert_learning import GAT_MLP_TL
+from models.model2 import GAT_MLP
 import numpy as np
 from transformers import AutoTokenizer
 import torch
@@ -66,9 +65,37 @@ learning_rate = 2e-5
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-# model = GAT_MLP(model_name=model_name, num_node_features=300, nout=768, nhid=300, graph_hidden_channels=300) # nout = bert model hidden dim
-model = GAT_MLP_TL(model_name=model_name, num_node_features=300, nout=1024, nhid=300, graph_hidden_channels=300) # nout = bert model hidden dim
+model = GAT_MLP(model_name=model_name, num_node_features=300, nout=256, nhid=300, graph_hidden_channels=300) # nout = bert model hidden dim
 model.to(device)
+
+### getting U, S, V
+print("Calculating PCA...")
+pca_loader = DataLoader(train_dataset, batch_size=1)
+text_embeddings = []
+torch.cuda.empty_cache()
+for batch in iter(pca_loader):
+    input_ids = batch['input_ids'].to(device)
+    attention_mask = batch['attention_mask'].to(device)    
+    text_embeddings.append(model.get_text_encoder()(input_ids, attention_mask).detach().cpu().numpy())
+    input_ids.detach()
+
+    attention_mask.detach()
+
+    with torch.cuda.device(device):
+        torch.cuda.empty_cache()
+embedding_output = torch.tensor(np.array(text_embeddings).reshape(-1, 768))
+U, S, V = torch.pca_lowrank(embedding_output, q=256)
+U = U.to(device)
+S = S.to(device)
+V = V.to(device)
+print("PCA done!")
+###
+
+def projected_embeddings(A):
+    return torch.matmul(A, V)
+
+def reconstruct(A):
+    return torch.matmul(A, V.T)
 
 optimizer = optim.AdamW(model.parameters(), lr=learning_rate,
                                 betas=(0.9, 0.999),
@@ -103,6 +130,8 @@ for i in range(nb_epochs):
         x_graph, x_text = model(graph_batch.to(device), 
                                 input_ids.to(device), 
                                 attention_mask.to(device))
+        
+        x_text = projected_embeddings(x_text)
         current_loss = contrastive_loss(x_graph, x_text)   
         optimizer.zero_grad()
         current_loss.backward()
@@ -130,6 +159,7 @@ for i in range(nb_epochs):
         x_graph, x_text = model(graph_batch.to(device), 
                                 input_ids.to(device), 
                                 attention_mask.to(device))
+        x_text = projected_embeddings(x_text)
         current_loss = contrastive_loss(x_graph, x_text)   
         val_loss += current_loss.item()
     scheduler.step(val_loss)
